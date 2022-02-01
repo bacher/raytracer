@@ -10,9 +10,12 @@ export type RenderOptions = {
   width: number;
   height: number;
   zoom: number;
+  gamma: number;
+  maxDepth: number;
+  useTrueLambertian: boolean;
   diffuseRaysProbes: number;
   diffuseSecondRaysProbes: number;
-  maxDepth: number;
+  diffuseAbsorb: number;
 };
 
 export const defaultConfig: Omit<RenderOptions, 'width' | 'height'> = {
@@ -20,9 +23,12 @@ export const defaultConfig: Omit<RenderOptions, 'width' | 'height'> = {
   diffThreshold: 0.25,
   highlightDiff: false,
   zoom: 1,
+  gamma: 1,
   maxDepth: 10,
+  useTrueLambertian: false,
   diffuseRaysProbes: 10,
   diffuseSecondRaysProbes: 1,
+  diffuseAbsorb: 0.5,
 };
 
 type color = vec3;
@@ -85,7 +91,7 @@ function getSphereHit(
   };
 }
 
-function randomInUnitSphere() {
+function randomInUnitSphere(): point3 {
   while (true) {
     const point = vec3.fromValues(
       Math.random() * 2 - 1,
@@ -97,6 +103,11 @@ function randomInUnitSphere() {
       return point;
     }
   }
+}
+
+function randomOnUnitSphere(): point3 {
+  const point = randomInUnitSphere();
+  return vec3.normalize(point, point);
 }
 
 enum ObjectType {
@@ -160,11 +171,19 @@ function getColorFromScene(
         : options.diffuseSecondRaysProbes;
     const accColor = vec3.create();
 
+    if (probes === 0) {
+      return vec3.fromValues(0, 0, 0);
+    }
+
     for (let i = 0; i < probes; i++) {
+      const randomPoint = options.useTrueLambertian
+        ? randomOnUnitSphere()
+        : randomInUnitSphere();
+
       const target = vec3.create();
       vec3.add(target, target, nearestHit.point);
       vec3.add(target, target, nearestHit.normal);
-      vec3.add(target, target, randomInUnitSphere());
+      vec3.add(target, target, randomPoint);
 
       const newRay: Ray = {
         origin: nearestHit.point,
@@ -183,7 +202,7 @@ function getColorFromScene(
       vec3.add(accColor, accColor, tracedColor);
     }
 
-    return vec3.scale(accColor, accColor, 0.5 / probes);
+    return vec3.scale(accColor, accColor, (1 - options.diffuseAbsorb) / probes);
   }
 
   const unitDirection = vec3.normalize(vec3.create(), ray.dir);
@@ -227,9 +246,19 @@ export function render(imageData: ImageData, options: RenderOptions) {
   };
 
   function writePixel(color: Readonly<vec3>, offset: number): void {
-    const ir = Math.floor(255.999 * color[0]);
-    const ig = Math.floor(255.999 * color[1]);
-    const ib = Math.floor(255.999 * color[2]);
+    // @ts-ignore
+    let [r, g, b] = color.values();
+
+    if (options.gamma !== 1) {
+      const power = 1 / options.gamma;
+      r = r ** power;
+      g = g ** power;
+      b = b ** power;
+    }
+
+    const ir = Math.floor(255.999 * r);
+    const ig = Math.floor(255.999 * g);
+    const ib = Math.floor(255.999 * b);
     data.set([ir, ig, ib, 255], offset);
   }
 

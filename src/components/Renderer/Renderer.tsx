@@ -28,7 +28,10 @@ export function Renderer() {
     gui.add(o, 'diffThreshold', 0, 3, 0.01).onChange(update);
     gui.add(o, 'highlightDiff').onChange(update);
     gui.add(o, 'zoom', 0.5, 100, 0.5).onChange(update);
+    gui.add(o, 'gamma', 0.5, 5, 0.1).onChange(update);
     gui.add(o, 'maxDepth', 0, 50, 1).onChange(update);
+    gui.add(o, 'useTrueLambertian').onChange(update);
+    gui.add(o, 'diffuseAbsorb', 0, 1, 0.05).onChange(update);
     gui.add(o, 'diffuseRaysProbes', 0, 100, 1).onChange(update);
     gui.add(o, 'diffuseSecondRaysProbes', 0, 20, 1).onChange(update);
 
