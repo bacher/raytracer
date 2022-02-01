@@ -14,6 +14,7 @@ code {
 }
 
 canvas.zoom {
+  position: absolute;
   transform: scale(var(--zoom));
   transform-origin: 0 0;
 }

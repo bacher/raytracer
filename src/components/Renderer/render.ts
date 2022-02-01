@@ -10,6 +10,9 @@ export type RenderOptions = {
   width: number;
   height: number;
   zoom: number;
+  diffuseRaysProbes: number;
+  diffuseSecondRaysProbes: number;
+  maxDepth: number;
 };
 
 export const defaultConfig: Omit<RenderOptions, 'width' | 'height'> = {
@@ -17,6 +20,9 @@ export const defaultConfig: Omit<RenderOptions, 'width' | 'height'> = {
   diffThreshold: 0.25,
   highlightDiff: false,
   zoom: 1,
+  maxDepth: 10,
+  diffuseRaysProbes: 10,
+  diffuseSecondRaysProbes: 1,
 };
 
 type color = vec3;
@@ -79,6 +85,20 @@ function getSphereHit(
   };
 }
 
+function randomInUnitSphere() {
+  while (true) {
+    const point = vec3.fromValues(
+      Math.random() * 2 - 1,
+      Math.random() * 2 - 1,
+      Math.random() * 2 - 1,
+    );
+
+    if (getSquaredLength(point) < 1) {
+      return point;
+    }
+  }
+}
+
 enum ObjectType {
   SPHERE = 'SPHERE',
 }
@@ -96,10 +116,12 @@ type Scene = {
 };
 
 function getColorFromScene(
+  options: RenderOptions,
   scene: Scene,
   ray: Ray,
   min: number,
   max: number,
+  depth: number,
 ): color {
   let nearestHit: Hit | undefined;
 
@@ -121,10 +143,47 @@ function getColorFromScene(
   }
 
   if (nearestHit) {
+    if (depth <= 1) {
+      return [0, 0, 0];
+    }
+
+    /*
     const color = vec3.create();
     vec3.add(color, nearestHit.normal, vec3.fromValues(1, 1, 1));
     vec3.scale(color, color, 0.5);
     return color;
+     */
+
+    const probes =
+      depth === options.maxDepth
+        ? options.diffuseRaysProbes
+        : options.diffuseSecondRaysProbes;
+    const accColor = vec3.create();
+
+    for (let i = 0; i < probes; i++) {
+      const target = vec3.create();
+      vec3.add(target, target, nearestHit.point);
+      vec3.add(target, target, nearestHit.normal);
+      vec3.add(target, target, randomInUnitSphere());
+
+      const newRay: Ray = {
+        origin: nearestHit.point,
+        dir: vec3.sub(vec3.create(), target, nearestHit.point),
+      };
+
+      const tracedColor = getColorFromScene(
+        options,
+        scene,
+        newRay,
+        0.001,
+        Infinity,
+        depth - 1,
+      );
+
+      vec3.add(accColor, accColor, tracedColor);
+    }
+
+    return vec3.scale(accColor, accColor, 0.5 / probes);
   }
 
   const unitDirection = vec3.normalize(vec3.create(), ray.dir);
@@ -145,13 +204,9 @@ function getColorDiff(color1: color, color2: color): number {
   );
 }
 
-export function render(
-  imageData: ImageData,
-  {avgMixer, diffThreshold, highlightDiff}: RenderOptions,
-) {
+export function render(imageData: ImageData, options: RenderOptions) {
   const {width, height, data} = imageData;
-
-  console.log(`render at ${width}x${height}`);
+  const {avgMixer, diffThreshold, highlightDiff, maxDepth} = options;
 
   let all = 0;
   let overDiff = 0;
@@ -213,7 +268,7 @@ export function render(
       dir,
     };
 
-    return getColorFromScene(scene, r, 0, Infinity);
+    return getColorFromScene(options, scene, r, 0, Infinity, maxDepth);
   }
 
   const fillRedPixels: {x: number; y: number}[] = [];
@@ -284,10 +339,11 @@ export function render(
     writePixel(red, ((y + 1) * width + x + 1) * 4);
   }
 
-  console.log('all =', all);
+  console.log('====================');
   console.log(
-    'overDiff =',
-    overDiff,
-    `ratio = ${((overDiff * 100) / all).toFixed(4)}%`,
+    `renderResolution=${width}x${height} basePixelsCount=${all} needDetails=${overDiff} needDetailsRatio=${(
+      (overDiff * 100) /
+      all
+    ).toFixed(2)}% totalPixels=${all - overDiff + overDiff * 4}`,
   );
 }
