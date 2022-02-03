@@ -1,49 +1,20 @@
 import {vec3} from 'gl-matrix';
 
-import type {point3, Ray} from './Ray';
-import {pointAtRay} from './Ray';
-
-export type RenderOptions = {
-  diffThreshold: number;
-  avgMixer: number;
-  highlightDiff: boolean;
-  width: number;
-  height: number;
-  zoom: number;
-  gamma: number;
-  maxDepth: number;
-  useTrueLambertian: boolean;
-  diffuseRaysProbes: number;
-  diffuseSecondRaysProbes: number;
-  diffuseAbsorb: number;
-};
-
-export const defaultConfig: Omit<RenderOptions, 'width' | 'height'> = {
-  avgMixer: 0.45,
-  diffThreshold: 0.25,
-  highlightDiff: false,
-  zoom: 1,
-  gamma: 1,
-  maxDepth: 10,
-  useTrueLambertian: false,
-  diffuseRaysProbes: 10,
-  diffuseSecondRaysProbes: 1,
-  diffuseAbsorb: 0.5,
-};
-
-type color = vec3;
+import type {RenderOptions} from './options';
+import {pointAtRay, point3, Ray} from './Ray';
+import {
+  color,
+  Hit,
+  MaterialType,
+  ObjectType,
+  Scene,
+  SphereObject,
+} from './types';
+import {scene} from './scene';
 
 function getSquaredLength(vec: vec3): number {
   return vec[0] ** 2 + vec[1] ** 2 + vec[2] ** 2;
 }
-
-type Hit = {
-  t: number;
-  point: point3;
-  normal: vec3;
-  isFrontFace: boolean;
-  material: Material;
-};
 
 function getSphereHit(
   {center, radius, material}: SphereObject,
@@ -127,28 +98,6 @@ function isNearZero(vec: vec3) {
   );
 }
 
-enum ObjectType {
-  SPHERE = 'SPHERE',
-}
-
-const enum Material {
-  SMOOTH,
-  METAL,
-}
-
-type SphereObject = {
-  type: ObjectType.SPHERE;
-  center: point3;
-  material: Material;
-  radius: number;
-};
-
-type SceneObject = SphereObject;
-
-type Scene = {
-  objects: SceneObject[];
-};
-
 function getColorFromScene(
   options: RenderOptions,
   scene: Scene,
@@ -195,7 +144,7 @@ function getColorFromScene(
     const accColor = vec3.create();
 
     if (probes === 0) {
-      return vec3.fromValues(0, 0, 0);
+      return [0, 0, 0];
     }
 
     for (let i = 0; i < probes; i++) {
@@ -203,9 +152,10 @@ function getColorFromScene(
         ? randomOnUnitSphere()
         : randomInUnitSphere();
 
+      const {color} = nearestHit.material;
       let dir: vec3;
 
-      if (nearestHit.material === Material.SMOOTH) {
+      if (nearestHit.material.type === MaterialType.SMOOTH) {
         dir = vec3.add(vec3.create(), nearestHit.normal, randomPoint);
 
         if (isNearZero(dir)) {
@@ -236,10 +186,11 @@ function getColorFromScene(
         depth - 1,
       );
 
+      vec3.mul(tracedColor, tracedColor, color);
       vec3.add(accColor, accColor, tracedColor);
     }
 
-    return vec3.scale(accColor, accColor, (1 - options.diffuseAbsorb) / probes);
+    return vec3.scale(accColor, accColor, 1 / probes);
   }
 
   const unitDirection = vec3.normalize(vec3.create(), ray.dir);
@@ -266,52 +217,6 @@ export function render(imageData: ImageData, options: RenderOptions) {
 
   let all = 0;
   let overDiff = 0;
-
-  /*
-  const scene: Scene = {
-    objects: [
-      {
-        type: ObjectType.SPHERE,
-        center: vec3.fromValues(0, 0, -1),
-        radius: 0.5,
-      },
-      {
-        type: ObjectType.SPHERE,
-        center: vec3.fromValues(0, -100.5, -1),
-        radius: 100,
-      },
-    ],
-  };
-   */
-
-  const scene: Scene = {
-    objects: [
-      {
-        type: ObjectType.SPHERE,
-        center: vec3.fromValues(0.0, -100.5, -1.0),
-        material: Material.SMOOTH,
-        radius: 100,
-      },
-      {
-        type: ObjectType.SPHERE,
-        center: vec3.fromValues(0.0, 0.0, -1.0),
-        material: Material.SMOOTH,
-        radius: 0.5,
-      },
-      {
-        type: ObjectType.SPHERE,
-        center: vec3.fromValues(-1.0, 0.0, -1.0),
-        material: Material.METAL,
-        radius: 0.5,
-      },
-      {
-        type: ObjectType.SPHERE,
-        center: vec3.fromValues(1.0, 0.0, -1.0),
-        material: Material.METAL,
-        radius: 0.5,
-      },
-    ],
-  };
 
   function writePixel(color: Readonly<vec3>, offset: number): void {
     // @ts-ignore
