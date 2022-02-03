@@ -11,12 +11,27 @@ export const enum ObjectType {
 export const enum MaterialType {
   SMOOTH,
   METAL,
+  DIELECTRIC,
 }
 
-export type Material = {
-  type: MaterialType;
+export type MetalMaterial = {
+  type: MaterialType.METAL;
+  color: color;
+  fuzz: number;
+};
+
+export type SmoothMaterial = {
+  type: MaterialType.SMOOTH;
   color: color;
 };
+
+export type DielectricMaterial = {
+  type: MaterialType.DIELECTRIC;
+  color: color;
+  refractionIndex: number;
+};
+
+export type Material = SmoothMaterial | MetalMaterial | DielectricMaterial;
 
 export type SphereObject = {
   type: ObjectType.SPHERE;

@@ -84,8 +84,36 @@ function randomOnUnitSphere(): point3 {
 }
 
 function reflect(ray: vec3, normal: vec3): vec3 {
+  const refl = vec3.create();
   const diff = vec3.scale(vec3.create(), normal, 2 * vec3.dot(ray, normal));
-  return vec3.sub(vec3.create(), ray, diff);
+  vec3.sub(refl, ray, diff);
+  // vec3.normalize(refl, refl);
+  /* TODO: Why unit vector?
+  const len = getSquaredLength(refl);
+  if (len < 0.99 || len > 1.01) {
+    debugger;
+  }
+   */
+  return refl;
+}
+
+function refract(
+  unitDirection: vec3,
+  cos_theta: number,
+  normal: vec3,
+  etai_over_etat: number,
+): vec3 {
+  const r_out_perp = vec3.scale(vec3.create(), normal, cos_theta);
+  vec3.add(r_out_perp, r_out_perp, unitDirection);
+  vec3.scale(r_out_perp, r_out_perp, etai_over_etat);
+
+  const r_out_parallel = vec3.scale(
+    vec3.create(),
+    normal,
+    -Math.sqrt(Math.abs(1.0 - getSquaredLength(r_out_perp))),
+  );
+
+  return vec3.add(vec3.create(), r_out_perp, r_out_parallel);
 }
 
 function isNearZero(vec: vec3) {
@@ -96,6 +124,12 @@ function isNearZero(vec: vec3) {
     Math.abs(vec[1]) < epsilon &&
     Math.abs(vec[2]) < epsilon
   );
+}
+
+function reflectance(cosine: number, ref_idx: number): number {
+  // Use Schlick's approximation for reflectance.
+  const r0 = ((1 - ref_idx) / (1 + ref_idx)) ** 2;
+  return r0 + (1 - r0) * (1 - cosine) ** 5;
 }
 
 function getColorFromScene(
@@ -148,28 +182,74 @@ function getColorFromScene(
     }
 
     for (let i = 0; i < probes; i++) {
-      const randomPoint = options.useTrueLambertian
-        ? randomOnUnitSphere()
-        : randomInUnitSphere();
-
-      const {color} = nearestHit.material;
+      const {material} = nearestHit;
       let dir: vec3;
 
-      if (nearestHit.material.type === MaterialType.SMOOTH) {
-        dir = vec3.add(vec3.create(), nearestHit.normal, randomPoint);
+      switch (material.type) {
+        case MaterialType.SMOOTH: {
+          const randomPoint = options.useTrueLambertian
+            ? randomOnUnitSphere()
+            : randomInUnitSphere();
 
-        if (isNearZero(dir)) {
-          dir = nearestHit.normal;
-        }
-      } else {
-        dir = reflect(
-          vec3.normalize(vec3.create(), ray.dir),
-          nearestHit.normal,
-        );
+          dir = vec3.add(vec3.create(), nearestHit.normal, randomPoint);
 
-        if (vec3.dot(dir, nearestHit.normal) <= 0) {
-          continue;
+          if (isNearZero(dir)) {
+            dir = nearestHit.normal;
+          }
+          break;
         }
+
+        case MaterialType.METAL: {
+          dir = reflect(
+            vec3.normalize(vec3.create(), ray.dir),
+            nearestHit.normal,
+          );
+
+          if (material.fuzz > 0) {
+            const fuzz = vec3.scale(
+              vec3.create(),
+              randomInUnitSphere(),
+              material.fuzz,
+            );
+            vec3.add(dir, dir, fuzz);
+          }
+
+          if (vec3.dot(dir, nearestHit.normal) <= 0) {
+            continue;
+          }
+          break;
+        }
+        case MaterialType.DIELECTRIC:
+          const refraction_ratio = nearestHit.isFrontFace
+            ? 1.0 / material.refractionIndex
+            : material.refractionIndex;
+
+          const dirNormalized = vec3.normalize(vec3.create(), ray.dir);
+
+          const cos_theta = Math.min(
+            vec3.dot(
+              vec3.scale(vec3.create(), dirNormalized, -1),
+              nearestHit.normal,
+            ),
+            1,
+          );
+
+          const sin_theta = Math.sqrt(1 - cos_theta ** 2);
+
+          if (
+            refraction_ratio * sin_theta > 1 ||
+            reflectance(cos_theta, refraction_ratio) > Math.random()
+          ) {
+            dir = reflect(dirNormalized, nearestHit.normal);
+          } else {
+            dir = refract(
+              dirNormalized,
+              cos_theta,
+              nearestHit.normal,
+              refraction_ratio,
+            );
+          }
+          break;
       }
 
       const newRay: Ray = {
@@ -186,7 +266,7 @@ function getColorFromScene(
         depth - 1,
       );
 
-      vec3.mul(tracedColor, tracedColor, color);
+      vec3.mul(tracedColor, tracedColor, material.color);
       vec3.add(accColor, accColor, tracedColor);
     }
 
