@@ -42,10 +42,11 @@ type Hit = {
   point: point3;
   normal: vec3;
   isFrontFace: boolean;
+  material: Material;
 };
 
 function getSphereHit(
-  {center, radius}: SphereObject,
+  {center, radius, material}: SphereObject,
   ray: Ray,
   min: number,
   max: number,
@@ -88,6 +89,7 @@ function getSphereHit(
     point: hitPoint,
     normal,
     isFrontFace,
+    material,
   };
 }
 
@@ -110,13 +112,34 @@ function randomOnUnitSphere(): point3 {
   return vec3.normalize(point, point);
 }
 
+function reflect(ray: vec3, normal: vec3): vec3 {
+  const diff = vec3.scale(vec3.create(), normal, 2 * vec3.dot(ray, normal));
+  return vec3.sub(vec3.create(), ray, diff);
+}
+
+function isNearZero(vec: vec3) {
+  const epsilon = 1e-8;
+
+  return (
+    Math.abs(vec[0]) < epsilon &&
+    Math.abs(vec[1]) < epsilon &&
+    Math.abs(vec[2]) < epsilon
+  );
+}
+
 enum ObjectType {
   SPHERE = 'SPHERE',
+}
+
+const enum Material {
+  SMOOTH,
+  METAL,
 }
 
 type SphereObject = {
   type: ObjectType.SPHERE;
   center: point3;
+  material: Material;
   radius: number;
 };
 
@@ -180,14 +203,28 @@ function getColorFromScene(
         ? randomOnUnitSphere()
         : randomInUnitSphere();
 
-      const target = vec3.create();
-      vec3.add(target, target, nearestHit.point);
-      vec3.add(target, target, nearestHit.normal);
-      vec3.add(target, target, randomPoint);
+      let dir: vec3;
+
+      if (nearestHit.material === Material.SMOOTH) {
+        dir = vec3.add(vec3.create(), nearestHit.normal, randomPoint);
+
+        if (isNearZero(dir)) {
+          dir = nearestHit.normal;
+        }
+      } else {
+        dir = reflect(
+          vec3.normalize(vec3.create(), ray.dir),
+          nearestHit.normal,
+        );
+
+        if (vec3.dot(dir, nearestHit.normal) <= 0) {
+          continue;
+        }
+      }
 
       const newRay: Ray = {
         origin: nearestHit.point,
-        dir: vec3.sub(vec3.create(), target, nearestHit.point),
+        dir,
       };
 
       const tracedColor = getColorFromScene(
@@ -230,6 +267,7 @@ export function render(imageData: ImageData, options: RenderOptions) {
   let all = 0;
   let overDiff = 0;
 
+  /*
   const scene: Scene = {
     objects: [
       {
@@ -241,6 +279,36 @@ export function render(imageData: ImageData, options: RenderOptions) {
         type: ObjectType.SPHERE,
         center: vec3.fromValues(0, -100.5, -1),
         radius: 100,
+      },
+    ],
+  };
+   */
+
+  const scene: Scene = {
+    objects: [
+      {
+        type: ObjectType.SPHERE,
+        center: vec3.fromValues(0.0, -100.5, -1.0),
+        material: Material.SMOOTH,
+        radius: 100,
+      },
+      {
+        type: ObjectType.SPHERE,
+        center: vec3.fromValues(0.0, 0.0, -1.0),
+        material: Material.SMOOTH,
+        radius: 0.5,
+      },
+      {
+        type: ObjectType.SPHERE,
+        center: vec3.fromValues(-1.0, 0.0, -1.0),
+        material: Material.METAL,
+        radius: 0.5,
+      },
+      {
+        type: ObjectType.SPHERE,
+        center: vec3.fromValues(1.0, 0.0, -1.0),
+        material: Material.METAL,
+        radius: 0.5,
       },
     ],
   };
