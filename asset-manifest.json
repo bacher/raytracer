@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/raytracer/static/css/main.400ae33d.css",
+    "main.js": "/raytracer/static/js/main.9253225e.js",
+    "index.html": "/raytracer/index.html",
+    "main.400ae33d.css.map": "/raytracer/static/css/main.400ae33d.css.map",
+    "main.9253225e.js.map": "/raytracer/static/js/main.9253225e.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.400ae33d.css",
+    "static/js/main.9253225e.js"
+  ]
+}
