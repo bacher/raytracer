@@ -2,6 +2,11 @@
 
 Simple ray-tracing renderer
 
+Based by series of tutorials at https://raytracing.github.io/
+
+Idea by [RayTracingInOneWeekend](https://raytracing.github.io/books/RayTracingInOneWeekend.html)
+
+
 ## Available Scripts
 
 In the project directory, you can run:
@@ -22,4 +27,3 @@ It correctly bundles React in production mode and optimizes the build for the be
 The build is minified and the filenames include the hashes.\
 Your app is ready to be deployed!
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
